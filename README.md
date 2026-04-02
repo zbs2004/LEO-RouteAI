@@ -84,4 +84,3 @@ git remote set-url origin https://github.com/your-other-account/repo.git
 git push -u origin main
 ```
 
-> Note / 注意：本环境当前没有可用的 Git CLI，因此无法直接完成推送。请在本机或具备 Git 的环境中执行上述命令。
