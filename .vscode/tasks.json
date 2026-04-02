@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run MATLAB main",
+      "type": "shell",
+      "command": "matlab",
+      "args": [
+        "-nosplash",
+        "-nodesktop",
+        "-batch",
+        "run('${workspaceFolder}/matlab/core/main.m')"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run current MATLAB file",
+      "type": "shell",
+      "command": "matlab",
+      "args": [
+        "-nosplash",
+        "-nodesktop",
+        "-batch",
+        "run('${file}')"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

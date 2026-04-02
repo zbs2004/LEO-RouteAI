@@ -1,0 +1,12 @@
+{
+  "congestion": 0.7339,
+  "hop": 1.499,
+  "delay": 2.7253,
+  "stability": 0.6445,
+  "balance": 0.7989,
+  "e2e": 1.4617,
+  "success": 0.5563,
+  "failure": 0.0047,
+  "step": 0.0533,
+  "progress": 0.0852
+}
