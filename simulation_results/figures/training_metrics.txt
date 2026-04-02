@@ -1,7 +1,0 @@
-Matplotlib unavailable, cannot generate plots.
-Logged episodes: 320
-Last reward: -352.8205939605994
-Last loss: 1.09903
-Last epsilon: 0.0
-Last steps: 200
-Last samples: 21113
