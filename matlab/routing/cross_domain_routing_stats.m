@@ -22,6 +22,7 @@ function [distance, hops, overhead] = cross_domain_routing_stats(src, dst, adjac
     % 构建域级图（考虑负载）
     num_domains = domains.num_domains;
     domain_graph = zeros(num_domains);
+    alpha = params.cross_domain_params.load_balancing_factor;
     if nargin >= 7 && ~isempty(load_matrix)
         max_load = max(load_matrix(:));
         if max_load == 0, max_load = 1; end
@@ -43,7 +44,7 @@ function [distance, hops, overhead] = cross_domain_routing_stats(src, dst, adjac
             if ~isinf(min_dist)
                 if nargin >= 7 && ~isempty(load_matrix)
                     norm_load = load_matrix(d1,d2) / max_load;
-                    weight = min_dist * (1 + params.cross_domain_params.load_balancing_factor * norm_load);
+                    weight = min_dist + alpha * norm_load;
                 else
                     weight = min_dist;
                 end
@@ -53,8 +54,17 @@ function [distance, hops, overhead] = cross_domain_routing_stats(src, dst, adjac
         end
     end
 
-    % 获取候选域路径
-    candidate_paths = k_shortest_paths{src_domain, dst_domain};
+    % 获取候选域路径：基于当前负载和 hop penalty 重新生成动态 K 最短路径
+    K = params.cross_domain_params.K_paths;
+    cand_graph = domain_graph;
+    hop_penalty_edge = params.cross_domain_params.hop_penalty_factor;
+    if hop_penalty_edge > 0
+        cand_graph(cand_graph > 0) = cand_graph(cand_graph > 0) + hop_penalty_edge;
+    end
+    candidate_paths = k_shortest_paths_yen(src_domain, dst_domain, cand_graph, K);
+    if isempty(candidate_paths)
+        candidate_paths = k_shortest_paths{src_domain, dst_domain};
+    end
     if isempty(candidate_paths)
         distance = Inf; hops = Inf; return;
     end
@@ -70,6 +80,18 @@ function [distance, hops, overhead] = cross_domain_routing_stats(src, dst, adjac
         end
     end
 
+    % 按最短距离优先，距离相同时按最少跳数
+    best_idx = 1;
+    [best_dist, best_hops] = try_domain_path_stats(candidate_paths{1}, src, dst, adjacency, domains, domain_nodes, inter_links, intra_dists, intra_hops);
+    for idx = 2:length(candidate_paths)
+        domain_path = candidate_paths{idx};
+        [dist, h] = try_domain_path_stats(domain_path, src, dst, adjacency, domains, domain_nodes, inter_links, intra_dists, intra_hops);
+        if dist < best_dist || (dist == best_dist && h < best_hops)
+            best_idx = idx;
+            best_dist = dist;
+            best_hops = h;
+        end
+    end
     distance = best_dist;
     hops = best_hops;
     overhead = length(candidate_paths);

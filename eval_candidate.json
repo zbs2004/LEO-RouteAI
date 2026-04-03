@@ -1,0 +1,18 @@
+{
+  "congestion": 0.25,
+  "hop": 4.0,
+  "delay": 6.0,
+  "stability": 0.5,
+  "balance": 0.25,
+  "e2e": 2.5,
+  "success": 1.0,
+  "failure": 0.1,
+  "step": 0.02,
+  "progress": 0.05,
+  "enable_queue_model": true,
+  "queue_capacity": 500,
+  "queue_service_rate": 1.0,
+  "queue_delay_weight": 0.01,
+  "queue_drop_penalty": 20.0,
+  "queue_time_per_step_ms": 10.0
+}

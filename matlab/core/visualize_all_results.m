@@ -32,12 +32,27 @@ function visualize_all_results(results, satellites, params, domains, topology, f
     
     % ========== 保存数据 ==========
     if params.save_data
-        data_file = fullfile(params.output_dir, 'data', 'simulation_results.mat');
+        out_dir = params.output_dir;
+        if ~exist(out_dir, 'dir')
+            mkdir(out_dir);
+        end
+
+        data_dir = fullfile(out_dir, 'data');
+        if ~exist(data_dir, 'dir')
+            mkdir(data_dir);
+        end
+
+        fig_dir = fullfile(out_dir, 'figures');
+        if ~exist(fig_dir, 'dir')
+            mkdir(fig_dir);
+        end
+
+        data_file = fullfile(data_dir, 'simulation_results.mat');
         save(data_file, 'results', 'params', 'satellites', 'algorithm_names', 'time_vector');
-        
+
         % 导出为CSV
         export_to_csv(results, algorithm_names, time_vector, params);
-        
+
         fprintf('     仿真数据已保存: %s\n', data_file);
     end
 

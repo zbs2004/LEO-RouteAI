@@ -1,7 +1,19 @@
-function [path, distance] = route_to_domain(current_sat, current_domain, next_domain, adjacency, domains, domain_nodes, intra_dists, inter_links, domain_graph, dst_domain)
+function [path, distance] = route_to_domain(current_sat, current_domain, next_domain, adjacency, domains, domain_nodes, intra_dists, inter_links, domain_graph, dst_domain, load_matrix, load_penalty_factor)
     path = [];
     distance = Inf;
     use_heuristic = nargin >= 10 && ~isempty(domain_graph) && nargin >= 11 && ~isempty(dst_domain);
+    use_load = nargin >= 12 && ~isempty(load_matrix);
+    if use_load
+        max_load = max(load_matrix(:));
+        if max_load == 0
+            max_load = 1;
+        end
+        if nargin < 13 || isempty(load_penalty_factor)
+            load_penalty_factor = 0.1;
+        end
+    else
+        load_penalty_factor = 0;
+    end
     if use_heuristic
         if size(domain_graph,1) < max(next_domain, dst_domain) || size(domain_graph,2) < max(next_domain, dst_domain)
             use_heuristic = false;
@@ -71,6 +83,12 @@ function [path, distance] = route_to_domain(current_sat, current_domain, next_do
             continue;
         end
         score = intra + isl_dist;
+        if use_load
+            norm_load = load_matrix(current_domain, next_domain) / max_load;
+        else
+            norm_load = 0;
+        end
+        score = score + load_penalty_factor * norm_load;
         if use_heuristic
             next_domain_dist = domain_to_dst(next_domain);
             if isinf(next_domain_dist)

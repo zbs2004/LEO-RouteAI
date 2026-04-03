@@ -39,7 +39,7 @@ function [path, distance, overhead] = rl_cross_domain_routing(src, dst, adjacenc
     % 第一步：从当前卫星到 next_domain 的入口节点
     dst_domain = domains.domain_assignment(dst);
     [first_seg, first_dist] = route_to_domain(current_sat, current_domain, next_domain, ...
-        adjacency, domains, domain_nodes, intra_dists, inter_links, domain_graph, dst_domain);
+        adjacency, domains, domain_nodes, intra_dists, inter_links, domain_graph, dst_domain, load_matrix, params.cross_domain_params.load_balancing_factor);
 
     if isempty(first_seg)
         path = [];

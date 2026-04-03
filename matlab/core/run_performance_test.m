@@ -105,7 +105,7 @@ for step = 1:params.num_time_steps
     end
 
     % 5. 本步性能测试
-    step_results = routing_performance_test(satellites, topology, domains, params, step, domain_cache, load_matrix, smooth_max_load, true);
+    step_results = routing_performance_test(satellites, topology, domains, params, step, domain_cache, load_matrix, smooth_max_load, false);
     if isfield(step_results, 'failed_requests')
         all_failed_requests = [all_failed_requests; step_results.failed_requests];
     end

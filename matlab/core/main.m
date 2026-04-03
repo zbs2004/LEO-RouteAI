@@ -66,6 +66,30 @@ num_domains = params.cross_domain_params.num_domains;
 load_matrix = zeros(num_domains);
 assignin('base', 'load_matrix', load_matrix);
 init_rl_variables();
+    % 初始化域级队列状态与参数，供 routing_performance_test 和 build_state_vector 使用
+    if isfield(params, 'queue_model')
+        try
+            dq = zeros(num_domains, 1);
+            assignin('base', 'domain_queues', dq);
+            % domain capacities 和 service_rate 可在 params.queue_model 中以向量或标量提供
+            if isfield(params.queue_model, 'domain_capacities')
+                assignin('base', 'domain_queue_capacity', params.queue_model.domain_capacities(:));
+            else
+                assignin('base', 'domain_queue_capacity', repmat(params.queue_model.capacity, num_domains, 1));
+            end
+            if isfield(params.queue_model, 'domain_service_rate')
+                assignin('base', 'domain_service_rate', params.queue_model.domain_service_rate(:));
+            else
+                assignin('base', 'domain_service_rate', repmat(params.queue_model.service_rate, num_domains, 1));
+            end
+        catch
+            % 忽略任何赋值错误，保持健壮性
+        end
+    else
+        assignin('base', 'domain_queues', zeros(num_domains, 1));
+        assignin('base', 'domain_queue_capacity', ones(num_domains, 1));
+        assignin('base', 'domain_service_rate', ones(num_domains, 1));
+    end
     
 for step = 1:params.num_time_steps
     fprintf('\n   时间步长 %d/%d (%.1f分钟)\n', ...

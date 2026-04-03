@@ -10,16 +10,27 @@ import time
 from pathlib import Path
 
 DEFAULT_WEIGHTS = {
-  "congestion": 0.7339,
-  "hop": 1.499,
-  "delay": 2.7253,
-  "stability": 0.6445,
-  "balance": 0.7989,
-  "e2e": 1.4617,
-  "success": 0.5563,
-  "failure": 0.0047,
-  "step": 0.0533,
-  "progress": 0.0852
+  "congestion": 0.25,
+  "hop": 4.0,
+  "delay": 6.0,
+  "stability": 0.5,
+  "balance": 0.25,
+  "e2e": 2.5,
+  "success": 1.0,
+  "failure": 0.1,
+  "step": 0.02,
+  "progress": 0.05
+}
+
+# 新增可优化的队列/仿真参数（用于压力场景）
+DEFAULT_EXTRA = {
+    'enable_queue_model': True,
+    # 调整为更贴近卫星/链路处理的默认值：更高容量、较低每包处理时间（ms）
+    'queue_capacity': 500,
+    'queue_service_rate': 1.0,
+    'queue_delay_weight': 0.01,
+    'queue_drop_penalty': 20.0,
+    'queue_time_per_step_ms': 10.0
 }
 
 
@@ -30,13 +41,13 @@ def parse_args():
                         help='Project root containing train_rl.py and reward_weights.json.')
     parser.add_argument('--base-config', type=str, default=None,
                         help='Optional base reward weight JSON file to start from.')
-    parser.add_argument('--population', type=int, default=4,
+    parser.add_argument('--population', type=int, default=8,
                         help='Number of reward weight candidates per generation.')
-    parser.add_argument('--generations', type=int, default=2,
+    parser.add_argument('--generations', type=int, default=4,
                         help='Number of evolution generations.')
-    parser.add_argument('--num-workers', type=int, default=1,
+    parser.add_argument('--num-workers', type=int, default=2,
                         help='Workers used during each evaluation run.')
-    parser.add_argument('--episodes-per-worker', type=int, default=20,
+    parser.add_argument('--episodes-per-worker', type=int, default=40,
                         help='Episode count per worker during evaluation.')
     parser.add_argument('--output', type=str, default='best_reward_weights.json',
                         help='Output path for the best reward weights.')
@@ -46,18 +57,82 @@ def parse_args():
 
 
 def load_base_weights(config_path):
+    # 返回包含 reward weights 与附加队列参数的初始配置字典
+    base = dict(DEFAULT_WEIGHTS)
+    extras = dict(DEFAULT_EXTRA)
     if config_path is None:
-        return dict(DEFAULT_WEIGHTS)
+        combined = {**base, **extras}
+        return combined
     with open(config_path, 'r', encoding='utf-8') as reader:
-        weights = json.load(reader)
-    return {k: float(weights.get(k, DEFAULT_WEIGHTS[k])) for k in DEFAULT_WEIGHTS}
+        cfg = json.load(reader)
+    # 覆盖 reward keys
+    for k in base:
+        if k in cfg:
+            try:
+                base[k] = float(cfg[k])
+            except Exception:
+                pass
+    # 覆盖 extras
+    for k in extras:
+        if k in cfg:
+            extras[k] = cfg[k]
+    combined = {**base, **extras}
+    return combined
 
 
-def perturb(weights, scale=0.3):
+def perturb(config, scale=0.3):
+    # 对不同参数采取不同的扰动策略并保持在合理范围内
     mutated = {}
-    for name, value in weights.items():
-        delta = random.uniform(-scale, scale) * max(0.05, abs(value))
-        mutated[name] = max(0.0, round(value + delta, 4))
+    for name, value in config.items():
+        if name == 'enable_queue_model':
+            # 小概率翻转布尔值
+            if random.random() < 0.05:
+                mutated[name] = not bool(value)
+            else:
+                mutated[name] = bool(value)
+            continue
+
+        # 队列参数的合理范围
+        if name == 'queue_capacity':
+            low, high = 50, 2000
+            base = int(max(1, float(value)))
+            delta = int(round(random.uniform(-scale, scale) * max(10, base * 0.5)))
+            v = max(low, min(high, base + delta))
+            mutated[name] = int(v)
+            continue
+        if name == 'queue_service_rate':
+            low, high = 0.1, 5.0
+            base = float(value)
+            v = base * (1.0 + random.uniform(-scale, scale))
+            mutated[name] = float(max(low, min(high, v)))
+            continue
+        if name == 'queue_delay_weight':
+            low, high = 0.0, 2.0
+            base = float(value)
+            v = base + random.uniform(-scale, scale) * max(0.01, base)
+            mutated[name] = float(max(low, min(high, v)))
+            continue
+        if name == 'queue_drop_penalty':
+            low, high = 0.0, 1000.0
+            base = float(value)
+            v = base * (1.0 + random.uniform(-scale, scale))
+            mutated[name] = float(max(low, min(high, v)))
+            continue
+        if name == 'queue_time_per_step_ms':
+            low, high = 0.1, 500.0
+            base = float(value)
+            v = base * (1.0 + random.uniform(-scale, scale))
+            mutated[name] = float(max(low, min(high, v)))
+            continue
+
+        # 默认处理 reward 权重
+        try:
+            val = float(value)
+        except Exception:
+            mutated[name] = value
+            continue
+        delta = random.uniform(-scale, scale) * max(0.05, abs(val))
+        mutated[name] = round(max(0.0, val + delta), 6)
     return mutated
 
 
@@ -69,7 +144,23 @@ def crossover(parent_a, parent_b):
 
 
 def normalize_weights(weights):
-    return {k: max(0.0, float(v)) for k, v in weights.items()}
+    out = {}
+    for k, v in weights.items():
+        if k == 'enable_queue_model':
+            out[k] = bool(v)
+        elif k == 'queue_capacity':
+            out[k] = int(max(1, int(round(float(v)))))
+        elif k == 'queue_service_rate':
+            out[k] = float(v)
+        elif k == 'queue_delay_weight':
+            out[k] = float(v)
+        elif k == 'queue_drop_penalty':
+            out[k] = float(v)
+        elif k == 'queue_time_per_step_ms':
+            out[k] = float(v)
+        else:
+            out[k] = max(0.0, float(v))
+    return out
 
 
 def evaluate(weights, code_dir, num_workers, episodes_per_worker, timeout):
@@ -134,12 +225,16 @@ def evaluate(weights, code_dir, num_workers, episodes_per_worker, timeout):
         success_rate = sum(successes) / n
         avg_steps = sum(steps) / n
         avg_delay = sum(delays) / n
+        # 训练日志中以毫秒记录延迟，将其换算为秒以避免在评分中产生过大惩罚
+        avg_delay_s = avg_delay / 1000.0
 
-        # 复合评分：优先保证成功率，再考虑路径长度和延迟。
-        # 成功率被放大到 1000 量级，避免大延迟/步数惩罚把好策略压成负数。
+        packet_loss_rate = (len(lines[1:]) - sum(successes)) / len(lines[1:]) if len(lines[1:]) > 0 else 0.0  # 丢包率 = 失败次数 / 总次数
+
+        # 复合评分：优先保证成功率，再考虑路径长度和延迟，加入丢包率惩罚
         score = success_rate * 1000.0
         score -= 3.0 * avg_steps
-        score -= 0.75 * avg_delay
+        score -= 0.75 * avg_delay_s
+        score -= 500.0 * packet_loss_rate  # 丢包率惩罚
         if success_rate < 0.90:
             score -= (0.90 - success_rate) * 1000.0
         if len(trimmed) > 0:

@@ -154,7 +154,7 @@ class SumTree:
         return idx, self.tree[idx], self.data[data_idx]
 
 class ReplayBuffer:
-    def __init__(self, capacity, alpha=0.6, beta=0.4, beta_increment=0.001):
+    def __init__(self, capacity, alpha=0.6, beta=0.4, beta_increment=0.005):
         self.tree = SumTree(capacity)
         self.alpha = alpha          
         self.beta = beta           
@@ -209,9 +209,9 @@ class ReplayBuffer:
 
 class Agent:
     def __init__(self, state_dim, action_dim, lr=0.0001, gamma=0.99,
-                 epsilon_start=1.0, epsilon_end=0.01, epsilon_decay=0.998,
-                 memory_size=150000, batch_size=128, target_update=50,
-                 tau=0.005, n_step=3, use_noisy=False):
+                 epsilon_start=1.0, epsilon_end=0.01, epsilon_decay=0.993,
+                 memory_size=150000, batch_size=64, target_update=50,
+                 tau=0.001, n_step=3, use_noisy=False):
         self.action_dim = action_dim
         self.gamma = gamma
         self.batch_size = batch_size
@@ -225,7 +225,7 @@ class Agent:
         self.policy_net = DuelingDQN(state_dim, action_dim, use_noisy=use_noisy).to(self.device)
         self.target_net = DuelingDQN(state_dim, action_dim, use_noisy=use_noisy).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
-        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr, weight_decay=1e-5)
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr, weight_decay=1e-4)
         self.memory = ReplayBuffer(memory_size)
         
         self.epsilon = epsilon_start
@@ -280,18 +280,17 @@ class Agent:
 
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), 5.0)
         self.optimizer.step()
 
         self.memory.update_priority(idxs, td_errors.detach().cpu().numpy())
 
         self.learn_steps += 1
-        if self.learn_steps % self.target_update == 0:
-            self.update_target_network()
-            if self.use_noisy:
-                self.target_net.reset_noise()
 
+        # 仅使用软更新以避免硬更新与软更新冲突引发目标网络震荡
         self.soft_update_target_network()
+        if self.use_noisy:
+            self.target_net.reset_noise()
 
         return loss.item()
 
